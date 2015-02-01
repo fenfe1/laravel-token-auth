@@ -19,6 +19,7 @@
     },
     "require-dev": {
         "illuminate/database": "~4.0",
+        "illuminate/auth": "~4.0",
         "illuminate/http": "~4.0"
     },
     "autoload": {
