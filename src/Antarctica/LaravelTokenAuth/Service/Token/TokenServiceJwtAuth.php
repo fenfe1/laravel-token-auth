@@ -75,13 +75,30 @@ class TokenServiceJwtAuth implements TokenServiceInterface {
     }
 
     /**
-     * @param $credentials
+     * @param array $credentials
      * @return string
      * @throws AuthenticationException
      */
-    public function authOnce($credentials)
+    public function issueUsingCredentials(array $credentials)
     {
         $token = JWTAuth::attempt($credentials);
+
+        if ($token === false)
+        {
+            throw new AuthenticationException();
+        }
+
+        return $token;
+    }
+
+    /**
+     * @param $user
+     * @return string
+     * @throws AuthenticationException
+     */
+    public function issueUsingUser($user)
+    {
+        $token = JWTAuth::fromUser($user);
 
         if ($token === false)
         {

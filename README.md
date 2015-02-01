@@ -38,11 +38,14 @@ php artisan config:publish antarctica/laravel-token-auth
     
 Then edit the `user_repository` key.
 
-## Usage
+### Filters
 
 To support both standard session based and token based authentication this package provides an `auth.combined` filter.
 
-To enable this filter add the following to your `app/filters.php` file:
+It it also recommended to use a [once basic](http://laravel.com/docs/4.2/security#http-basic-authentication) filter for 
+authenticating users via Basic authentication in order to request a token (i.e. at the start of the authentication flow).
+
+To enable these filters add the following to your `app/filters.php` file:
 
 ```php
 /*
@@ -53,20 +56,121 @@ To enable this filter add the following to your `app/filters.php` file:
 | The "combined" filter is a custom filter which allows session and token
 | based authentication to be combined. This means a user can be authenticated
 | using either an active session (i.e. being logged in) or by providing a
-| token (i.e. using the Authorization header).
+| token (i.e. using the Authorization header). The "once" filter is a
+| stateless version of the "basic" filter suitable for use in APIs.
 |
 */
 
 Route::filter('auth.combined', 'Antarctica\LaravelTokenAuth\Filter\AuthFilter');
+
+Route::filter('auth.once', function()
+{
+	
+	return Auth::onceBasic();
+});
 ```
 
-To use the filter on a route:
+Note: The `Auth::onceBasic()` method will check against a `email` field in your user model by default. If you use a 
+different field (i.e. `username`) add this as a argument.
+
+E.g.
+
+```php
+	return Auth::onceBasic('username');
+```
+
+## Usage
+
+### Issuing tokens
+
+In a controller (i.e. `tokensController`) add a method (i.e. `store`) to issue a token.
+
+It is recommended to protect this method with Basic authentication (SSL is therefore a requirement) using the `auth.basic`
+filter. This ensures a valid user exists, which can then be passed to this package to issue a token.
+
+In the controller constructor inject the TokenUserService from this package and protect the store method used to issue 
+new tokens with the `auth.basic` filter.
+
+```php
+<?php
+
+use Antarctica\LaravelTokenAuth\Service\TokenUser\TokenUserServiceInterface;
+
+class TokensController extends BaseController {
+
+    function __construct(TokenUserServiceInterface $TokenUser)
+    {
+        // The store method is the only method that accepts a users real credentials,
+        // and therefore uses a different authentication filter to perform a check of
+        // the users actual credentials (as opposed to a token or a session).
+        $this->beforeFilter('auth.once', array('only' => array('store')));
+
+        $this->TokenUser = $TokenUser;
+    }
+    
+    /**
+     * Issue a new token if auth successful
+     * POST /tokens
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function store()
+    {
+        $token = $this->TokenUser->issue();
+
+        $tokenExpiry = $this->TokenUser->getTokenInterface()->getExpiry($token);
+
+        $data = [
+            'token' => $token
+        ];
+
+        $notices = [
+            [
+                'type' => 'token_generated',
+                'details' => [
+                    'expiry' => [
+                        'expires' => $tokenExpiry,
+                        'message' => 'This token will expire at: ' . Carbon::createFromTimeStamp($tokenExpiry)->toDateTimeString() . ', at which point you will need to request a new token.'
+                    ]
+                ]
+            ]
+        ];
+
+        return Response::json(['notices' => $notices, 'data' => $data]);
+    }
+}
+```
+
+Note: Currently this approach only allows the actual auth user to be used (i.e. you cannot provide a user object to 
+perform user ghosting. This will be addressed in future versions of the package.
+
+Alternatively you can use this package to authenticate a user's credentials and issue a token. This is not recommended
+as users will need to use a non-standard way to provide their credentials and you will have to collect them and pass to
+this package. Internally this package performs exactly the same *auth once* check that the recommended method uses.
+
+Note: From version `1.0.0` onwards this package will no longer provide the ability to pass a users credentials. It is 
+therefore recommended not to rely on this ability now.
+
+### Protecting routes (i.e. require a valid token to access)
+
+Use the `auth.combined` filter on any route you wish to protect. If a valid token (or authentication session) cannot be
+found suitable error will be returned (i.e. expired token, no token, etc.)
+
+E.g. In `routes.php`
 
 ```php
 Route::get('/secret', array('before' => 'auth.combined', function()
 {
     	return Response::json(['message' => 'Yay you get to know the secret']);
 }));
+```
+
+E.g. In a controller:
+
+```php
+function __construct()
+    {
+        $this->beforeFilter('auth.combined');
+    }
 ```
 
 ## Contributing

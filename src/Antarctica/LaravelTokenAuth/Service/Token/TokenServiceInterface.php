@@ -28,8 +28,14 @@ interface TokenServiceInterface {
     public function getExpiry($token);
 
     /**
-     * @param $credentials
+     * @param array $credentials
      * @return string
      */
-    public function authOnce($credentials);
+    public function issueUsingCredentials(array $credentials);
+
+    /**
+     * @param $user
+     * @return string
+     */
+    public function issueUsingUser($user);
 }

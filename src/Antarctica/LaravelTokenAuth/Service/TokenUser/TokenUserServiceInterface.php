@@ -30,7 +30,7 @@ interface TokenUserServiceInterface {
      * @param array $credentials
      * @return mixed
      */
-    public function issue(array $credentials);
+    public function issue(array $credentials = []);
 
     /**
      * @param string $token
